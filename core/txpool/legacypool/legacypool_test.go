@@ -1536,6 +1536,33 @@ func TestMinGasPriceEnforced(t *testing.T) {
 	}
 }
 
+func TestEqualTxGasWithBlockGasLimit(t *testing.T) {
+	t.Parallel()
+	baseSize := uint64(213)
+	gasLimit := uint64(10000000)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, gasLimit, statedb, new(event.Feed))
+
+	txPoolConfig := DefaultConfig
+	txPoolConfig.NoLocals = true
+	pool := New(txPoolConfig, blockchain)
+	pool.Init(new(big.Int).SetUint64(txPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+
+	tx := pricedDataTransaction(0, gasLimit, big.NewInt(3), key, baseSize)
+
+	pool.SetGasTip(big.NewInt(2))
+
+	if err := pool.addLocal(tx); err != nil {
+		t.Fatalf("Cannot pass the tx equal Gas test")
+	}
+
+}
+
 // Tests that setting the transaction pool gas price to a higher value correctly
 // discards everything cheaper (legacy & dynamic fee) than that and moves any
 // gapped transactions back from the pending pool to the queue.
